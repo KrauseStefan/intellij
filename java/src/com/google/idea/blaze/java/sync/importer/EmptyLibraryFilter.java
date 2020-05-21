@@ -21,10 +21,15 @@ import com.google.idea.blaze.base.command.buildresult.BlazeArtifact;
 import com.google.idea.blaze.base.ideinfo.ArtifactLocation;
 import com.google.idea.blaze.base.model.BlazeLibrary;
 import com.google.idea.blaze.base.sync.workspace.ArtifactLocationDecoder;
+import com.google.idea.blaze.java.libraries.JarCache;
 import com.google.idea.blaze.java.sync.model.BlazeJarLibrary;
 import com.google.idea.common.experiments.FeatureRolloutExperiment;
 import com.google.idea.common.experiments.IntExperiment;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.Predicate;
@@ -70,8 +75,10 @@ public class EmptyLibraryFilter implements Predicate<BlazeLibrary> {
   private static final Logger logger = Logger.getInstance(EmptyLibraryFilter.class);
 
   private final ArtifactLocationDecoder locationDecoder;
+  private final Project project;
 
-  EmptyLibraryFilter(ArtifactLocationDecoder locationDecoder) {
+  EmptyLibraryFilter(Project project, ArtifactLocationDecoder locationDecoder) {
+    this.project = project;
     this.locationDecoder = locationDecoder;
   }
 
@@ -84,11 +91,24 @@ public class EmptyLibraryFilter implements Predicate<BlazeLibrary> {
     if (!isEnabled() || !(blazeLibrary instanceof BlazeJarLibrary)) {
       return true;
     }
+    // Try to find jars from {@link JarCache} first since it saves fetching time for {@link
+    // RemoteOutputArtifact}
+    File cachedFile =
+        JarCache.getInstance(project).getCachedJar(locationDecoder, (BlazeJarLibrary) blazeLibrary);
+    if (cachedFile != null) {
+      try {
+        return !isEmpty(cachedFile.length(), getEmptyChecker(cachedFile));
+      } catch (IOException e) {
+        logger.warn(e);
+        return true;
+      }
+    }
+
     ArtifactLocation location =
         ((BlazeJarLibrary) blazeLibrary).libraryArtifact.jarForIntellijLibrary();
     BlazeArtifact artifact = locationDecoder.resolveOutput(location);
     try {
-      return !isEmpty(artifact);
+      return !isEmpty(artifact.getLength(), getEmptyChecker(artifact));
     } catch (IOException e) {
       logger.warn(e);
       return true;
@@ -96,11 +116,35 @@ public class EmptyLibraryFilter implements Predicate<BlazeLibrary> {
   }
 
   /**
+   * Returns {@link EmptyJarChecker} which will open {@link InputStream} for a {@link File} and
+   * check if it meets {@link #isEmpty(JarInputStream)}
+   */
+  static EmptyJarChecker getEmptyChecker(File file) {
+    return () -> {
+      try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file));
+          JarInputStream jarInputStream = new JarInputStream(inputStream)) {
+        return isEmpty(jarInputStream);
+      }
+    };
+  }
+
+  /**
+   * Returns {@link EmptyJarChecker} which will open {@link InputStream} for a {@link BlazeArtifact}
+   * and check if it meets {@link #isEmpty(JarInputStream)}
+   */
+  static EmptyJarChecker getEmptyChecker(BlazeArtifact artifact) {
+    return () -> {
+      try (InputStream inputStream = artifact.getInputStream();
+          JarInputStream jarInputStream = new JarInputStream(inputStream)) {
+        return isEmpty(jarInputStream);
+      }
+    };
+  }
+  /**
    * Returns true if the given JAR is effectively empty (i.e. it has nothing other than a manifest
    * and directories).
    */
-  static boolean isEmpty(BlazeArtifact artifact) throws IOException {
-    long length = artifact.getLength();
+  static boolean isEmpty(long length, EmptyJarChecker emptyJarChecker) throws IOException {
     if (length <= presumedEmptyThresholdBytes.getValue()) {
       // Note: this implicitly includes files that can't be found (length -1 or 0).
       return true;
@@ -108,10 +152,7 @@ public class EmptyLibraryFilter implements Predicate<BlazeLibrary> {
     if (length >= presumedNonEmptyThresholdBytes.getValue()) {
       return false;
     }
-    try (InputStream inputStream = artifact.getInputStream();
-        JarInputStream jarInputStream = new JarInputStream(inputStream)) {
-      return isEmpty(jarInputStream);
-    }
+    return emptyJarChecker.check();
   }
 
   private static boolean isEmpty(JarInputStream jar) throws IOException {
@@ -121,5 +162,11 @@ public class EmptyLibraryFilter implements Predicate<BlazeLibrary> {
       }
     }
     return true;
+  }
+
+  /** Get input stream. */
+  @FunctionalInterface
+  public interface EmptyJarChecker {
+    boolean check() throws IOException;
   }
 }
