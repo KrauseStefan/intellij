@@ -48,19 +48,37 @@ public class EmptyLibraryFilterTest extends BlazeTestCase {
   @Test
   public void isEmpty_nonexistent() throws IOException {
     File jar = new File("nonexistent.jar");
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isTrue();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isTrue();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isTrue();
   }
 
   @Test
   public void isEmpty_trulyEmpty() throws IOException {
     File jar = JarBuilder.newEmptyJar(tempDirectory).build();
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isTrue();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isTrue();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isTrue();
   }
 
   @Test
   public void isEmpty_largeButManifestOnly() throws IOException {
     File jar = JarBuilder.newEmptyJar(tempDirectory).addManifest().bloatBy(200).build();
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isTrue();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isTrue();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isTrue();
   }
 
   @Test
@@ -71,7 +89,13 @@ public class EmptyLibraryFilterTest extends BlazeTestCase {
             .addDirectory("dir2/")
             .addManifest()
             .build();
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isTrue();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isTrue();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isTrue();
   }
 
   @Test
@@ -81,7 +105,13 @@ public class EmptyLibraryFilterTest extends BlazeTestCase {
             .addManifest()
             .addFile("com/google/example/A.java", "package com.google.example; class A {}")
             .build();
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isFalse();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isFalse();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isFalse();
   }
 
   @Test
@@ -95,6 +125,12 @@ public class EmptyLibraryFilterTest extends BlazeTestCase {
             .addFile("com/google/example/B.java", "package com.google.example; public class B {}")
             .addFile("com/google/example/C.java", "package com.google.example; public class C {}")
             .build();
-    assertThat(EmptyLibraryFilter.isEmpty(new SourceArtifact(jar))).isFalse();
+    assertThat(EmptyLibraryFilter.isEmpty(jar.length(), EmptyLibraryFilter.getEmptyChecker(jar)))
+        .isFalse();
+    SourceArtifact sourceArtifact = new SourceArtifact(jar);
+    assertThat(
+            EmptyLibraryFilter.isEmpty(
+                sourceArtifact.getLength(), EmptyLibraryFilter.getEmptyChecker(sourceArtifact)))
+        .isFalse();
   }
 }

@@ -19,6 +19,8 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.intellij.aspect.Common;
 import com.google.devtools.intellij.ideinfo.IntellijIdeInfo.JavaSourcePackage;
@@ -26,6 +28,7 @@ import com.google.devtools.intellij.ideinfo.IntellijIdeInfo.PackageManifest;
 import com.google.idea.blaze.base.BlazeTestCase;
 import com.google.idea.blaze.base.async.executor.BlazeExecutor;
 import com.google.idea.blaze.base.async.executor.MockBlazeExecutor;
+import com.google.idea.blaze.base.command.buildresult.RemoteOutputArtifact;
 import com.google.idea.blaze.base.command.info.BlazeInfo;
 import com.google.idea.blaze.base.ideinfo.ArtifactLocation;
 import com.google.idea.blaze.base.ideinfo.TargetKey;
@@ -38,6 +41,7 @@ import com.google.idea.blaze.base.model.primitives.WorkspacePath;
 import com.google.idea.blaze.base.model.primitives.WorkspaceRoot;
 import com.google.idea.blaze.base.prefetch.MockPrefetchService;
 import com.google.idea.blaze.base.prefetch.PrefetchService;
+import com.google.idea.blaze.base.prefetch.RemoteArtifactPrefetcher;
 import com.google.idea.blaze.base.projectview.section.sections.DirectoryEntry;
 import com.google.idea.blaze.base.scope.BlazeContext;
 import com.google.idea.blaze.base.scope.ErrorCollector;
@@ -53,6 +57,7 @@ import com.google.idea.blaze.java.sync.model.BlazeSourceDirectory;
 import com.google.idea.common.experiments.ExperimentService;
 import com.google.idea.common.experiments.MockExperimentService;
 import java.io.File;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
@@ -102,6 +107,9 @@ public class SourceDirectoryCalculatorTest extends BlazeTestCase {
     applicationServices.register(ExperimentService.class, experimentService);
 
     applicationServices.register(PrefetchService.class, new MockPrefetchService());
+
+    applicationServices.register(
+        RemoteArtifactPrefetcher.class, new MockRemoteArtifactPrefetcher());
 
     registerExtensionPoint(JavaLikeLanguage.EP_NAME, JavaLikeLanguage.class)
         .registerExtension(new JavaLikeLanguage.Java());
@@ -1208,13 +1216,31 @@ public class SourceDirectoryCalculatorTest extends BlazeTestCase {
       Map<TargetKey, ArtifactLocation> manifests, ArtifactLocationDecoder decoder) {
     return PackageManifestReader.getInstance()
         .readPackageManifestFiles(
-            context, decoder, manifests, MoreExecutors.newDirectExecutorService());
+            project, context, decoder, manifests, MoreExecutors.newDirectExecutorService());
   }
 
   static class MockFileOperationProvider extends FileOperationProvider {
     @Override
     public long getFileModifiedTime(File file) {
       return 1;
+    }
+  }
+
+  static class MockRemoteArtifactPrefetcher implements RemoteArtifactPrefetcher {
+    @Override
+    public ListenableFuture<?> loadFilesInJvm(Collection<RemoteOutputArtifact> outputArtifacts) {
+      return Futures.immediateFuture(null);
+    }
+
+    @Override
+    public ListenableFuture<?> downloadArtifacts(
+        String projectName, Collection<RemoteOutputArtifact> outputArtifacts) {
+      return Futures.immediateFuture(null);
+    }
+
+    @Override
+    public ListenableFuture<?> cleanupLocalCacheDir(String projectName) {
+      return Futures.immediateFuture(null);
     }
   }
 }
